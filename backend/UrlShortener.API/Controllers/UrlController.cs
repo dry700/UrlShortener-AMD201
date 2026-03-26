@@ -27,13 +27,13 @@ public class UrlController : ControllerBase
             || (uri.Scheme != "http" && uri.Scheme != "https"))
             return BadRequest(new { error = "Invalid URL. Must start with http:// or https://" });
 
-        // Generate unique 6-character code
+        // Use CountDocumentsAsync instead of AnyAsync — easier to mock in tests
         string code;
         do
         {
             code = GenerateCode();
         }
-        while (await _collection.Find(u => u.Code == code).AnyAsync());
+        while (await _collection.CountDocumentsAsync(u => u.Code == code) > 0);
 
         var shortUrl = new ShortUrl
         {
@@ -74,7 +74,6 @@ public class UrlController : ControllerBase
         if (entry == null)
             return NotFound(new { error = "Short URL not found." });
 
-        // Increment click count
         var update = Builders<ShortUrl>.Update.Inc(u => u.ClickCount, 1);
         await _collection.UpdateOneAsync(u => u.Code == code, update);
 

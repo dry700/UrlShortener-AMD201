@@ -13,36 +13,21 @@ public class UrlControllerTests
 {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private static Mock<IAsyncCursor<ShortUrl>> BuildCursor(List<ShortUrl> documents)
-    {
-        var mockCursor = new Mock<IAsyncCursor<ShortUrl>>();
-
-        // Current must ALWAYS return the list — AnyAsync reads it before MoveNextAsync
-        mockCursor.Setup(c => c.Current).Returns(documents);
-
-        // MoveNextAsync: return true once if there are docs, then false
-        if (documents.Count > 0)
-        {
-            mockCursor.SetupSequence(c => c.MoveNextAsync(default))
-                      .ReturnsAsync(true)
-                      .ReturnsAsync(false);
-        }
-        else
-        {
-            // Empty collection — always return false so AnyAsync returns false
-            mockCursor.Setup(c => c.MoveNextAsync(default)).ReturnsAsync(false);
-        }
-
-        return mockCursor;
-    }
-
     private static Mock<IMongoCollection<ShortUrl>> BuildCollectionMock(
         List<ShortUrl>? documents = null)
     {
         documents ??= new List<ShortUrl>();
-        var mockCursor = BuildCursor(documents);
+
+        // ── Cursor for Find() ────────────────────────────────────────────────
+        var mockCursor = new Mock<IAsyncCursor<ShortUrl>>();
+        mockCursor.Setup(c => c.Current).Returns(documents);
+        mockCursor.SetupSequence(c => c.MoveNextAsync(default))
+                  .ReturnsAsync(documents.Count > 0)
+                  .ReturnsAsync(false);
+
         var mockCollection = new Mock<IMongoCollection<ShortUrl>>();
 
+        // Find() — used by GetAll, RedirectToUrl
         mockCollection
             .Setup(c => c.FindAsync(
                 It.IsAny<FilterDefinition<ShortUrl>>(),
@@ -50,6 +35,16 @@ public class UrlControllerTests
                 default))
             .ReturnsAsync(mockCursor.Object);
 
+        // CountDocumentsAsync — used by Create() to check code uniqueness
+        // Returns 0 meaning no existing document has that code → always unique
+        mockCollection
+            .Setup(c => c.CountDocumentsAsync(
+                It.IsAny<FilterDefinition<ShortUrl>>(),
+                It.IsAny<CountOptions>(),
+                default))
+            .ReturnsAsync(0L);
+
+        // InsertOneAsync — success
         mockCollection
             .Setup(c => c.InsertOneAsync(
                 It.IsAny<ShortUrl>(),
@@ -57,6 +52,7 @@ public class UrlControllerTests
                 default))
             .Returns(Task.CompletedTask);
 
+        // UpdateOneAsync — success
         mockCollection
             .Setup(c => c.UpdateOneAsync(
                 It.IsAny<FilterDefinition<ShortUrl>>(),
@@ -88,7 +84,6 @@ public class UrlControllerTests
     [Fact]
     public async Task Create_ValidUrl_ReturnsOk()
     {
-        // Empty list → AnyAsync returns false → no code clash → inserts successfully
         var mock = BuildCollectionMock(new List<ShortUrl>());
         var result = await BuildController(mock).Create(new CreateUrlRequest("https://example.com"));
 
