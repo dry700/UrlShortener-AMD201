@@ -140,9 +140,9 @@
               "target": "Package",
               "version": "[17.12.0, )"
             },
-            "Mongo2Go": {
+            "Moq": {
               "target": "Package",
-              "version": "[3.1.3, )"
+              "version": "[4.20.72, )"
             },
             "coverlet.collector": {
               "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",

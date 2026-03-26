@@ -7,14 +7,15 @@ public class MongoDbService
 {
     private readonly IMongoCollection<ShortUrl> _collection;
 
+    // Parameterless constructor required for Moq to create a mock subclass
+    protected MongoDbService() { _collection = null!; }
+
     public MongoDbService(string connectionString)
     {
         var client = new MongoClient(connectionString);
         var database = client.GetDatabase("url_shortener");
         _collection = database.GetCollection<ShortUrl>("short_urls");
 
-        // Create unique index on Code — wrapped in try/catch so
-        // test runners (Mongo2Go) don't crash if index setup is slow
         try
         {
             var indexModel = new CreateIndexModel<ShortUrl>(
@@ -23,11 +24,9 @@ public class MongoDbService
             );
             _collection.Indexes.CreateOne(indexModel);
         }
-        catch
-        {
-            // Index creation is a performance optimisation — safe to skip in tests
-        }
+        catch { /* Safe to skip in tests */ }
     }
 
-    public IMongoCollection<ShortUrl> ShortUrls => _collection;
+    // virtual — allows Moq to override this property in tests
+    public virtual IMongoCollection<ShortUrl> ShortUrls => _collection;
 }

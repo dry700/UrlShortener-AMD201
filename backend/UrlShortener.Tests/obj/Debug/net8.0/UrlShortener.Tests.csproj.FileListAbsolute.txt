@@ -437,7 +437,6 @@ E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShorten
 E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\bin\Debug\net8.0\AWSSDK.Core.dll
 E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\bin\Debug\net8.0\AWSSDK.SecurityToken.dll
 E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\bin\Debug\net8.0\DnsClient.dll
-E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\bin\Debug\net8.0\Mongo2Go.dll
 E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\bin\Debug\net8.0\MongoDB.Bson.dll
 E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\bin\Debug\net8.0\MongoDB.Driver.dll
 E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\bin\Debug\net8.0\MongoDB.Driver.Core.dll
@@ -449,3 +448,5 @@ E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShorten
 E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\bin\Debug\net8.0\runtimes\osx\native\libmongocrypt.dylib
 E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\bin\Debug\net8.0\runtimes\win\native\mongocrypt.dll
 E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\obj\Debug\net8.0\UrlShortener.Tests.sourcelink.json
+E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\bin\Debug\net8.0\Castle.Core.dll
+E:\3192_60274_S_AMD201_Students\Labs\coursework\url-shortener\backend\UrlShortener.Tests\bin\Debug\net8.0\Moq.dll
