@@ -1,25 +1,34 @@
 using Xunit;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Mongo2Go;
 using UrlShortener.API.Controllers;
 using UrlShortener.API.Data;
 using UrlShortener.API.Models;
+using MongoDB.Driver;
 
 namespace UrlShortener.Tests;
 
-public class UrlControllerTests
+public class UrlControllerTests : IDisposable
 {
-    private static AppDbContext GetDb(string name)
+    private readonly MongoDbRunner _runner;
+    private readonly MongoDbService _db;
+
+    public UrlControllerTests()
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(name).Options;
-        return new AppDbContext(options);
+        // Spins up a real temporary MongoDB instance for each test class
+        _runner = MongoDbRunner.Start();
+        _db = new MongoDbService(_runner.ConnectionString);
     }
 
-    private static UrlController MakeController(AppDbContext db)
+    public void Dispose()
     {
-        var ctrl = new UrlController(db);
+        _runner.Dispose();
+    }
+
+    private UrlController MakeController()
+    {
+        var ctrl = new UrlController(_db);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext()
@@ -32,36 +41,35 @@ public class UrlControllerTests
     [Fact]
     public async Task Create_ValidUrl_ReturnsOk()
     {
-        using var db = GetDb("valid");
-        var result = await MakeController(db).Create(new CreateUrlRequest("https://example.com"));
+        var result = await MakeController().Create(new CreateUrlRequest("https://example.com"));
         Assert.IsType<OkObjectResult>(result);
-        Assert.Equal(1, await db.ShortUrls.CountAsync());
+        Assert.Equal(1, await _db.ShortUrls.CountDocumentsAsync(_ => true));
     }
 
     [Fact]
     public async Task Create_EmptyUrl_ReturnsBadRequest()
     {
-        using var db = GetDb("empty");
-        var result = await MakeController(db).Create(new CreateUrlRequest(""));
+        var result = await MakeController().Create(new CreateUrlRequest(""));
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
     [Fact]
     public async Task Create_InvalidUrl_ReturnsBadRequest()
     {
-        using var db = GetDb("invalid");
-        var result = await MakeController(db).Create(new CreateUrlRequest("not-a-url"));
+        var result = await MakeController().Create(new CreateUrlRequest("not-a-url"));
         Assert.IsType<BadRequestObjectResult>(result);
     }
 
     [Fact]
     public async Task Redirect_KnownCode_ReturnsRedirect()
     {
-        using var db = GetDb("redirect_ok");
-        db.ShortUrls.Add(new ShortUrl { Code = "abc123", OriginalUrl = "https://example.com" });
-        await db.SaveChangesAsync();
+        await _db.ShortUrls.InsertOneAsync(new ShortUrl
+        {
+            Code = "abc123",
+            OriginalUrl = "https://example.com"
+        });
 
-        var result = await MakeController(db).RedirectToUrl("abc123");
+        var result = await MakeController().RedirectToUrl("abc123");
         var redirect = Assert.IsType<RedirectResult>(result);
         Assert.Equal("https://example.com", redirect.Url);
     }
@@ -69,33 +77,36 @@ public class UrlControllerTests
     [Fact]
     public async Task Redirect_UnknownCode_ReturnsNotFound()
     {
-        using var db = GetDb("redirect_404");
-        var result = await MakeController(db).RedirectToUrl("xxxxxx");
+        var result = await MakeController().RedirectToUrl("xxxxxx");
         Assert.IsType<NotFoundObjectResult>(result);
     }
 
     [Fact]
     public async Task Redirect_IncrementsClickCount()
     {
-        using var db = GetDb("clicks");
-        db.ShortUrls.Add(new ShortUrl { Code = "click1", OriginalUrl = "https://example.com", ClickCount = 0 });
-        await db.SaveChangesAsync();
+        await _db.ShortUrls.InsertOneAsync(new ShortUrl
+        {
+            Code = "click1",
+            OriginalUrl = "https://example.com",
+            ClickCount = 0
+        });
 
-        await MakeController(db).RedirectToUrl("click1");
-        Assert.Equal(1, (await db.ShortUrls.FirstAsync(u => u.Code == "click1")).ClickCount);
+        await MakeController().RedirectToUrl("click1");
+
+        var entry = await _db.ShortUrls.Find(u => u.Code == "click1").FirstAsync();
+        Assert.Equal(1, entry.ClickCount);
     }
 
     [Fact]
     public async Task GetAll_ReturnsAllUrls()
     {
-        using var db = GetDb("getall");
-        db.ShortUrls.AddRange(
+        await _db.ShortUrls.InsertManyAsync(new[]
+        {
             new ShortUrl { Code = "aaa", OriginalUrl = "https://a.com" },
             new ShortUrl { Code = "bbb", OriginalUrl = "https://b.com" }
-        );
-        await db.SaveChangesAsync();
+        });
 
-        var result = await MakeController(db).GetAll();
+        var result = await MakeController().GetAll();
         var ok = Assert.IsType<OkObjectResult>(result);
         Assert.Equal(2, ((IEnumerable<ShortUrl>)ok.Value!).Count());
     }

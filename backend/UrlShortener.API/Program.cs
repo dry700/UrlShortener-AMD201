@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using UrlShortener.API.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -7,8 +6,12 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite("Data Source=urls.db"));
+// Read MongoDB connection string from environment variable
+// Set MONGODB_URI on Render, or use MongoDB Atlas free tier
+var mongoUri = Environment.GetEnvironmentVariable("MONGODB_URI")
+               ?? "mongodb://localhost:27017";
+
+builder.Services.AddSingleton(new MongoDbService(mongoUri));
 
 builder.Services.AddCors(options =>
 {
@@ -17,12 +20,6 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
-
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.EnsureCreated();
-}
 
 app.UseSwagger();
 app.UseSwaggerUI();

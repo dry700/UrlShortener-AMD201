@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using MongoDB.Driver;
 using UrlShortener.API.Data;
 using UrlShortener.API.Models;
 
@@ -9,11 +9,11 @@ namespace UrlShortener.API.Controllers;
 [Route("api/[controller]")]
 public class UrlController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private readonly IMongoCollection<ShortUrl> _collection;
 
-    public UrlController(AppDbContext db)
+    public UrlController(MongoDbService db)
     {
-        _db = db;
+        _collection = db.ShortUrls;
     }
 
     // POST /api/url — create a short URL
@@ -27,9 +27,13 @@ public class UrlController : ControllerBase
             || (uri.Scheme != "http" && uri.Scheme != "https"))
             return BadRequest(new { error = "Invalid URL. Must start with http:// or https://" });
 
+        // Generate unique 6-character code
         string code;
-        do { code = GenerateCode(); }
-        while (await _db.ShortUrls.AnyAsync(u => u.Code == code));
+        do
+        {
+            code = GenerateCode();
+        }
+        while (await _collection.Find(u => u.Code == code).AnyAsync());
 
         var shortUrl = new ShortUrl
         {
@@ -38,8 +42,7 @@ public class UrlController : ControllerBase
             CreatedAt = DateTime.UtcNow
         };
 
-        _db.ShortUrls.Add(shortUrl);
-        await _db.SaveChangesAsync();
+        await _collection.InsertOneAsync(shortUrl);
 
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
         return Ok(new
@@ -56,8 +59,9 @@ public class UrlController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var urls = await _db.ShortUrls
-            .OrderByDescending(u => u.CreatedAt)
+        var urls = await _collection
+            .Find(_ => true)
+            .SortByDescending(u => u.CreatedAt)
             .ToListAsync();
         return Ok(urls);
     }
@@ -66,12 +70,13 @@ public class UrlController : ControllerBase
     [HttpGet("/r/{code}")]
     public async Task<IActionResult> RedirectToUrl(string code)
     {
-        var entry = await _db.ShortUrls.FirstOrDefaultAsync(u => u.Code == code);
+        var entry = await _collection.Find(u => u.Code == code).FirstOrDefaultAsync();
         if (entry == null)
             return NotFound(new { error = "Short URL not found." });
 
-        entry.ClickCount++;
-        await _db.SaveChangesAsync();
+        // Increment click count
+        var update = Builders<ShortUrl>.Update.Inc(u => u.ClickCount, 1);
+        await _collection.UpdateOneAsync(u => u.Code == code, update);
 
         return Redirect(entry.OriginalUrl);
     }
