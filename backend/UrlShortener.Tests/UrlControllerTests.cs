@@ -13,24 +13,36 @@ public class UrlControllerTests
 {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Creates a mock IMongoCollection that returns the provided list of ShortUrls
-    /// for any Find() call, and accepts any InsertOne/UpdateOne calls.
-    /// </summary>
+    private static Mock<IAsyncCursor<ShortUrl>> BuildCursor(List<ShortUrl> documents)
+    {
+        var mockCursor = new Mock<IAsyncCursor<ShortUrl>>();
+
+        // Current must ALWAYS return the list — AnyAsync reads it before MoveNextAsync
+        mockCursor.Setup(c => c.Current).Returns(documents);
+
+        // MoveNextAsync: return true once if there are docs, then false
+        if (documents.Count > 0)
+        {
+            mockCursor.SetupSequence(c => c.MoveNextAsync(default))
+                      .ReturnsAsync(true)
+                      .ReturnsAsync(false);
+        }
+        else
+        {
+            // Empty collection — always return false so AnyAsync returns false
+            mockCursor.Setup(c => c.MoveNextAsync(default)).ReturnsAsync(false);
+        }
+
+        return mockCursor;
+    }
+
     private static Mock<IMongoCollection<ShortUrl>> BuildCollectionMock(
         List<ShortUrl>? documents = null)
     {
         documents ??= new List<ShortUrl>();
-
-        var mockCursor = new Mock<IAsyncCursor<ShortUrl>>();
-        mockCursor.SetupSequence(c => c.MoveNextAsync(default))
-                  .ReturnsAsync(true)
-                  .ReturnsAsync(false);
-        mockCursor.Setup(c => c.Current).Returns(documents);
-
+        var mockCursor = BuildCursor(documents);
         var mockCollection = new Mock<IMongoCollection<ShortUrl>>();
 
-        // Find() — return cursor over our documents list
         mockCollection
             .Setup(c => c.FindAsync(
                 It.IsAny<FilterDefinition<ShortUrl>>(),
@@ -38,7 +50,6 @@ public class UrlControllerTests
                 default))
             .ReturnsAsync(mockCursor.Object);
 
-        // InsertOneAsync — do nothing (success)
         mockCollection
             .Setup(c => c.InsertOneAsync(
                 It.IsAny<ShortUrl>(),
@@ -46,7 +57,6 @@ public class UrlControllerTests
                 default))
             .Returns(Task.CompletedTask);
 
-        // UpdateOneAsync — do nothing (success)
         mockCollection
             .Setup(c => c.UpdateOneAsync(
                 It.IsAny<FilterDefinition<ShortUrl>>(),
@@ -58,9 +68,6 @@ public class UrlControllerTests
         return mockCollection;
     }
 
-    /// <summary>
-    /// Wraps a mock collection in a MongoDbService and wires up the HTTP context.
-    /// </summary>
     private static UrlController BuildController(Mock<IMongoCollection<ShortUrl>> mockCollection)
     {
         var mockDb = new Mock<MongoDbService>("mongodb://localhost:27017");
@@ -81,12 +88,11 @@ public class UrlControllerTests
     [Fact]
     public async Task Create_ValidUrl_ReturnsOk()
     {
-        // Empty list means no existing code clash — unique code generated on first try
+        // Empty list → AnyAsync returns false → no code clash → inserts successfully
         var mock = BuildCollectionMock(new List<ShortUrl>());
         var result = await BuildController(mock).Create(new CreateUrlRequest("https://example.com"));
 
         Assert.IsType<OkObjectResult>(result);
-        // Verify InsertOneAsync was called exactly once
         mock.Verify(c => c.InsertOneAsync(
             It.IsAny<ShortUrl>(),
             It.IsAny<InsertOneOptions>(),
@@ -126,7 +132,6 @@ public class UrlControllerTests
     [Fact]
     public async Task Redirect_UnknownCode_ReturnsNotFound()
     {
-        // Empty collection — no match for any code
         var mock = BuildCollectionMock(new List<ShortUrl>());
         var result = await BuildController(mock).RedirectToUrl("xxxxxx");
         Assert.IsType<NotFoundObjectResult>(result);
@@ -142,7 +147,6 @@ public class UrlControllerTests
         var mock = BuildCollectionMock(docs);
         await BuildController(mock).RedirectToUrl("click1");
 
-        // Verify UpdateOneAsync was called to increment click count
         mock.Verify(c => c.UpdateOneAsync(
             It.IsAny<FilterDefinition<ShortUrl>>(),
             It.IsAny<UpdateDefinition<ShortUrl>>(),
